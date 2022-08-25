@@ -1,4 +1,7 @@
 {
+  "editorOnly": true,
+  "noTranslations": true,
+  "enabledByDefault": true,
   "name": "Select stage colors in the costume editor",
   "description": "Allows the costume editor's eye dropper to also pick colors from the stage.",
   "credits": [
