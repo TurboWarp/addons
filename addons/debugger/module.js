@@ -22,7 +22,7 @@ let audioContextStateChange = Promise.resolve();
 export const isPaused = () => paused;
 
 const pauseThread = (thread) => {
-  if (thread.updateMonitor || pausedThreadState.has(thread)) {
+  if (thread.updateMonitor || pausedThreadState.has(thread) || thread.dontPause) {
     // Thread is already paused or shouldn't be paused.
     return;
   }
@@ -51,6 +51,12 @@ const ensurePausedThreadIsStillPaused = (thread) => {
   }
   const pauseState = pausedThreadState.get(thread);
   if (pauseState) {
+    if (thread.dontPause) {
+      // This thread has told us not to pause it,
+      // We'll let the thread handle its status itself just in case.
+      pausedThreadState.delete(thread);
+      return;
+    }
     if (thread.status !== STATUS_PROMISE_WAIT) {
       // We'll record the change so we can properly resume the thread, but the thread must still be paused for now.
       pauseState.status = thread.status;
@@ -401,9 +407,11 @@ export const setup = (addon) => {
   const originalStartHats = vm.runtime.startHats;
   vm.runtime.startHats = function (...args) {
     const hat = args[0];
+    // Never attempt to pause new threads if the hat is marked to not be paused.
+    const neverPause = vm.runtime.neverPauseHats.has(hat);
     // These hats can be manually started by the user when paused or while single stepping.
     const isUserInitiated = hat === "event_whenbroadcastreceived" || hat === "control_start_as_clone";
-    if (pauseNewThreads) {
+    if (!neverPause && pauseNewThreads) {
       if (!isUserInitiated && !this.getIsEdgeActivatedHat(hat)) {
         return [];
       }
@@ -412,7 +420,7 @@ export const setup = (addon) => {
         pauseThread(thread);
       }
       return newThreads;
-    } else if (paused && !isUserInitiated) {
+    } else if (!neverPause && paused && !isUserInitiated) {
       return [];
     }
     return originalStartHats.apply(this, args);
